@@ -29,4 +29,16 @@ impl Molecule {
             cartesian_coords,
         }
     }
+
+    pub fn n_atoms(&self) -> usize {
+        self.atomic_nums.len()
+    }
+
+    pub fn atomic_nums(&self) -> &[u8] {
+        &self.atomic_nums
+    }
+
+    pub fn cartesian_coords(&self) -> &MatrixXx3<f64> {
+        &self.cartesian_coords
+    }
 }
