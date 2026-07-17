@@ -9,6 +9,9 @@ pub trait CellData {
 
 pub trait AtomicData {
     fn atomic_nums(&self) -> &[u8];
+    fn n_atoms(&self) -> usize {
+        self.atomic_nums().len()
+    }
 }
 
 pub trait CartAtomicData {

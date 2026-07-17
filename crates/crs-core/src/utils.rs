@@ -228,13 +228,15 @@ mod tests {
         let (cell_matrix, _, volume) = cell_matrix_and_volume(lengths, angles);
 
         let frac_coords = MatrixXx3::from_row_slice(&[0.5, 0.5, 0.5]);
-        let sym_ops = SpaceGroup::default_setting(1).operations().unwrap();
+        let sg = SpaceGroup::default_setting(1);
+        let sym_ops = sg.operations();
         let new_coords = apply_symops(&frac_coords, &sym_ops);
         assert_eq!(new_coords.nrows(), 1);
         assert_eq!(new_coords, frac_coords);
 
         let frac_coords = MatrixXx3::from_row_slice(&[0.25, 0.25, 0.25]);
-        let sym_ops = SpaceGroup::default_setting(2).operations().unwrap();
+        let sg = SpaceGroup::default_setting(2);
+        let sym_ops = sg.operations();
         let new_coords = apply_symops(&frac_coords, &sym_ops);
         assert_eq!(new_coords.nrows(), 2);
         println!("New coords: {}", &new_coords);
@@ -247,7 +249,8 @@ mod tests {
     #[test]
     fn test_wrap_coordinates_in_place() {
         let frac_coords = MatrixXx3::from_row_slice(&[0.5, 0.5, 0.5]);
-        let sym_ops = SpaceGroup::default_setting(2).operations().unwrap();
+        let sg = SpaceGroup::default_setting(2);
+        let sym_ops = sg.operations();
         let mut new_coords = apply_symops(&frac_coords, &sym_ops);
         assert_eq!(new_coords.nrows(), 2);
         println!("New coords: {}", &new_coords);

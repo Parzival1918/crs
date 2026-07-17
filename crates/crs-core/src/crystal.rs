@@ -29,7 +29,7 @@ impl Crystal {
     fn formula(&self) -> String {
         chemical_formula(
             self.atomic_nums(),
-            self.space_group.n_symops().unwrap_or(1) as usize,
+            self.space_group.n_symops() as usize,
         )
     }
 
@@ -47,7 +47,7 @@ impl Crystal {
 
     pub fn density(&self) -> f64 {
         let au_mass = molar_mass(self.asymmetric_unit.atomic_nums()) / AVOGADRO_NUMBER; // Convert to kg
-        let total_mass = au_mass * self.space_group().n_symops().unwrap_or(1) as f64; // Total mass in kg
+        let total_mass = au_mass * self.space_group().n_symops() as f64; // Total mass in kg
         let volume = self.unit_cell.volume(); // Volume in cubic angstroms
         total_mass / (volume * ANGSTROM3_TO_CM3) // Convert volume to cubic centimeters and calculate density in g/cm^3
     }

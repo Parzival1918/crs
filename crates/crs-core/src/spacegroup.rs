@@ -30,6 +30,7 @@ pub struct SpaceGroup {
     number: u16,
     setting: Setting,
     primitive: bool,
+    operations: Vec<SymOp>,
 }
 
 impl SpaceGroup {
@@ -37,10 +38,16 @@ impl SpaceGroup {
         if !(1 <= number && number <= 230) {
             return Err(CoreError::InvalidSpaceGroupNumber(number));
         }
+        let operations = operations_from_number(number as i32, setting, primitive)
+            .map_err(|_| CoreError::InvalidSpaceGroupSettings(setting, primitive))?
+            .into_iter()
+            .map(|op| SymOp::new(op.rotation.cast::<f64>(), op.translation))
+            .collect();
         Ok(Self {
             number,
             setting,
             primitive,
+            operations,
         })
     }
 
@@ -53,21 +60,12 @@ impl SpaceGroup {
     }
 
     // Get the symmetry operations for the space group
-    // setting: The setting of the space group
-    // primitive: Whether to return the operations for the primitive cell or the conventional cell
-    pub fn operations(&self) -> Result<Vec<SymOp>, CoreError> {
-        let ops = operations_from_number(self.number as i32, self.setting, self.primitive)
-            .map_err(|e| CoreError::InvalidSpaceGroupNumber(self.number))?;
-        Ok(ops
-            .into_iter()
-            .map(|op| SymOp::new(op.rotation.cast::<f64>(), op.translation))
-            .collect())
+    pub fn operations(&self) -> &[SymOp] {
+        &self.operations
     }
 
-    pub fn n_symops(&self) -> Result<usize, CoreError> {
-        let ops = operations_from_number(self.number as i32, self.setting, self.primitive)
-            .map_err(|e| CoreError::InvalidSpaceGroupNumber(self.number))?;
-        Ok(ops.len())
+    pub fn n_symops(&self) -> usize {
+        self.operations.len()
     }
 }
 
@@ -90,22 +88,22 @@ mod tests {
     #[test]
     fn test_space_group_operations() {
         let sg = SpaceGroup::new(1, Setting::Spglib, true).unwrap();
-        let ops = sg.operations().unwrap();
+        let ops = sg.operations();
         assert_eq!(ops.len(), 1);
 
         let sg = SpaceGroup::new(2, Setting::Spglib, true).unwrap();
-        let ops = sg.operations().unwrap();
+        let ops = sg.operations();
         assert_eq!(ops.len(), 2);
 
         let sg = SpaceGroup::new(14, Setting::Spglib, true).unwrap();
-        let ops = sg.operations().unwrap();
+        let ops = sg.operations();
         assert_eq!(ops.len(), 4);
 
         let sg = SpaceGroup::new(15, Setting::Spglib, true).unwrap();
-        let ops = sg.operations().unwrap();
+        let ops = sg.operations();
         assert_eq!(ops.len(), 4);
         let sg = SpaceGroup::new(15, Setting::Spglib, false).unwrap();
-        let ops = sg.operations().unwrap();
+        let ops = sg.operations();
         assert_eq!(ops.len(), 8);
     }
 }
