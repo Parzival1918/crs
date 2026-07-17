@@ -1,4 +1,3 @@
-use crate::utils::cart_to_frac;
 use nalgebra::{Matrix3, MatrixXx3};
 
 pub trait CellData {
