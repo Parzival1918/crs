@@ -1,7 +1,7 @@
 use crate::data::{get_atomic_mass, get_covalent_radius, get_species_name};
 use crate::molecule::{BondSettings, Molecule};
 use crate::spacegroup::SymOp;
-use crate::traits::{AtomicData, CellData, FracAtomicData};
+use crate::traits::{AtomicData, CartAtomicData, CellData};
 use kdtree::KdTree;
 use kdtree::distance::squared_euclidean;
 use nalgebra::{Matrix3, MatrixXx3};
@@ -216,27 +216,50 @@ fn resolve_bond_params(atomic_nums: &[u8], settings: &BondSettings) -> (Vec<f64>
     (radii, tolerance, max_cutoff)
 }
 
-/// Compute the fractional-space cutoff distance along each cell axis.
+/// Compute the face normals (unit vectors), perpendicular heights, and lattice
+/// vectors of the unit cell. All quantities are in Cartesian space.
 ///
-/// For each axis `i`, compute how far `max_cutoff` Å extends in fractional
-/// coordinates by measuring the Cartesian length of each inverse-cell row
-/// (which converts Cartesian distances to fractional ones).
-fn compute_fractional_cutoffs(cell: &impl CellData, max_cutoff: f64) -> [f64; 3] {
-    let inv = cell.inv_cell_matrix();
-    let mut frac_cutoffs = [0.0; 3];
+/// Returns `(normals, heights, lattice_vectors)` where:
+/// - `normals[i]` is the outward unit normal to the i-th pair of opposing faces
+/// - `heights[i]` is the perpendicular distance between the i-th pair of faces
+/// - `lattice_vectors[i]` is the i-th lattice vector (row of cell matrix)
+fn compute_cell_face_geometry(cell: &impl CellData) -> ([[f64; 3]; 3], [f64; 3], [[f64; 3]; 3]) {
+    use nalgebra::Vector3;
+
+    let m = cell.cell_matrix();
+    let a = Vector3::new(m[(0, 0)], m[(0, 1)], m[(0, 2)]);
+    let b = Vector3::new(m[(1, 0)], m[(1, 1)], m[(1, 2)]);
+    let c = Vector3::new(m[(2, 0)], m[(2, 1)], m[(2, 2)]);
+
+    let vol = cell.volume().abs();
+
+    // Cross products give the (unnormalized) face normals:
+    //   face 0 (bc-face, perpendicular to a): normal = b × c
+    //   face 1 (ca-face, perpendicular to b): normal = c × a
+    //   face 2 (ab-face, perpendicular to c): normal = a × b
+    let crosses = [b.cross(&c), c.cross(&a), a.cross(&b)];
+
+    let mut normals = [[0.0; 3]; 3];
+    let mut heights = [0.0; 3];
     for i in 0..3 {
-        // The i-th column of the inverse matrix maps a unit Cartesian displacement
-        // to fractional space. The norm of this column gives the conversion factor.
-        let col = inv.column(i);
-        frac_cutoffs[i] = max_cutoff * col.norm();
+        let norm = crosses[i].norm();
+        normals[i] = [
+            crosses[i][0] / norm,
+            crosses[i][1] / norm,
+            crosses[i][2] / norm,
+        ];
+        heights[i] = vol / norm;
     }
-    frac_cutoffs
+
+    let lattice_vectors = [[a[0], a[1], a[2]], [b[0], b[1], b[2]], [c[0], c[1], c[2]]];
+
+    (normals, heights, lattice_vectors)
 }
 
 /// Find molecules in a set of atoms, accept an Option<CellData> that if provided
 /// will use periodicity in the search for molecules. If None is provided,
 /// it will treat the atoms as a cluster and find molecules without periodicity.
-pub fn find_molecules<A: AtomicData + FracAtomicData, C: CellData>(
+pub fn find_molecules<A: AtomicData + CartAtomicData, C: CellData>(
     atoms: &A,
     cell: Option<&C>,
     settings: BondSettings,
@@ -249,12 +272,7 @@ pub fn find_molecules<A: AtomicData + FracAtomicData, C: CellData>(
 
     let (radii, tolerance, max_cutoff) = resolve_bond_params(atomic_nums, &settings);
 
-    // Convert fractional coordinates to Cartesian.
-    let frac_coords = atoms.fractional_coords();
-    let cart_coords = match cell {
-        Some(c) => frac_to_cart(frac_coords, c),
-        None => frac_coords.clone(),
-    };
+    let cart_coords = atoms.cartesian_coords();
 
     // Build the kd-tree with all real atoms and (optionally) periodic ghost images.
     // Each entry stores (cartesian_position, original_atom_index).
@@ -270,55 +288,54 @@ pub fn find_molecules<A: AtomicData + FracAtomicData, C: CellData>(
 
     // Add periodic ghost images for atoms near cell boundaries.
     if let Some(c) = cell {
-        let frac_cutoffs = compute_fractional_cutoffs(c, max_cutoff);
-        let cell_matrix = c.cell_matrix();
+        let (normals, heights, lattice_vecs) = compute_cell_face_geometry(c);
 
         for i in 0..n_atoms {
-            let fx = frac_coords[(i, 0)];
-            let fy = frac_coords[(i, 1)];
-            let fz = frac_coords[(i, 2)];
+            let r = [
+                cart_coords[(i, 0)],
+                cart_coords[(i, 1)],
+                cart_coords[(i, 2)],
+            ];
 
-            // For each axis, determine which periodic shifts are needed.
-            // An atom at fractional coord `f` is near the lower boundary if `f < cutoff`,
-            // and near the upper boundary if `f > 1 - cutoff`.
-            let mut shifts_x: Vec<f64> = Vec::with_capacity(3);
-            shifts_x.push(0.0); // always include original (no shift)
-            if fx < frac_cutoffs[0] {
-                shifts_x.push(1.0);
-            }
-            if fx > 1.0 - frac_cutoffs[0] {
-                shifts_x.push(-1.0);
-            }
+            // For each pair of opposing faces, determine which periodic shifts
+            // are needed by computing the perpendicular distance from the atom
+            // to each face in Cartesian space.
+            let mut dir_shifts: [Vec<f64>; 3] = [vec![0.0], vec![0.0], vec![0.0]];
+            for d in 0..3 {
+                let dist_near: f64 = r
+                    .iter()
+                    .zip(normals[d].iter())
+                    .map(|(ri, ni)| ri * ni)
+                    .sum();
+                let dist_far = heights[d] - dist_near;
 
-            let mut shifts_y: Vec<f64> = Vec::with_capacity(3);
-            shifts_y.push(0.0);
-            if fy < frac_cutoffs[1] {
-                shifts_y.push(1.0);
-            }
-            if fy > 1.0 - frac_cutoffs[1] {
-                shifts_y.push(-1.0);
-            }
-
-            let mut shifts_z: Vec<f64> = Vec::with_capacity(3);
-            shifts_z.push(0.0);
-            if fz < frac_cutoffs[2] {
-                shifts_z.push(1.0);
-            }
-            if fz > 1.0 - frac_cutoffs[2] {
-                shifts_z.push(-1.0);
+                if dist_near < max_cutoff {
+                    dir_shifts[d].push(1.0); // ghost shifted by +lattice_vec[d]
+                }
+                if dist_far < max_cutoff {
+                    dir_shifts[d].push(-1.0); // ghost shifted by -lattice_vec[d]
+                }
             }
 
-            // Generate ghost images from the Cartesian product of shifts,
+            // Generate ghost images from the Cartesian product of per-direction shifts,
             // skipping the (0,0,0) combination which is the original atom.
-            for &sx in &shifts_x {
-                for &sy in &shifts_y {
-                    for &sz in &shifts_z {
-                        if sx == 0.0 && sy == 0.0 && sz == 0.0 {
+            for &s0 in &dir_shifts[0] {
+                for &s1 in &dir_shifts[1] {
+                    for &s2 in &dir_shifts[2] {
+                        if s0 == 0.0 && s1 == 0.0 && s2 == 0.0 {
                             continue;
                         }
-                        let ghost_frac = MatrixXx3::from_row_slice(&[fx + sx, fy + sy, fz + sz]);
-                        let ghost_cart = &ghost_frac * cell_matrix;
-                        let pt = [ghost_cart[(0, 0)], ghost_cart[(0, 1)], ghost_cart[(0, 2)]];
+                        let pt = [
+                            r[0] + s0 * lattice_vecs[0][0]
+                                + s1 * lattice_vecs[1][0]
+                                + s2 * lattice_vecs[2][0],
+                            r[1] + s0 * lattice_vecs[0][1]
+                                + s1 * lattice_vecs[1][1]
+                                + s2 * lattice_vecs[2][1],
+                            r[2] + s0 * lattice_vecs[0][2]
+                                + s1 * lattice_vecs[1][2]
+                                + s2 * lattice_vecs[2][2],
+                        ];
                         tree.add(pt, i)
                             .expect("Failed to add ghost point to kd-tree");
                     }
@@ -515,10 +532,10 @@ mod tests {
     // find_molecules tests
     // =========================================================================
 
-    /// A simple test struct implementing AtomicData + FracAtomicData.
+    /// A simple test struct implementing AtomicData + CartAtomicData.
     struct TestAtoms {
         atomic_nums: Vec<u8>,
-        frac_coords: MatrixXx3<f64>,
+        cart_coords: MatrixXx3<f64>,
     }
 
     impl AtomicData for TestAtoms {
@@ -527,9 +544,9 @@ mod tests {
         }
     }
 
-    impl FracAtomicData for TestAtoms {
-        fn fractional_coords(&self) -> &MatrixXx3<f64> {
-            &self.frac_coords
+    impl CartAtomicData for TestAtoms {
+        fn cartesian_coords(&self) -> &MatrixXx3<f64> {
+            &self.cart_coords
         }
     }
 
@@ -537,7 +554,7 @@ mod tests {
     fn test_find_molecules_empty() {
         let atoms = TestAtoms {
             atomic_nums: vec![],
-            frac_coords: MatrixXx3::zeros(0),
+            cart_coords: MatrixXx3::zeros(0),
         };
         let uc = UnitCell::cubic(10.0);
         let molecules = find_molecules(&atoms, Some(&uc), BondSettings::Default);
@@ -547,14 +564,14 @@ mod tests {
     #[test]
     fn test_find_molecules_isolated_atoms() {
         // Two atoms far apart in a large cubic cell — should be two separate molecules.
+        let uc = UnitCell::cubic(10.0);
         let atoms = TestAtoms {
             atomic_nums: vec![6, 8], // C and O
-            frac_coords: MatrixXx3::from_row_slice(&[
-                0.1, 0.1, 0.1, // C at (1,1,1) Å in a 10 Å cell
-                0.9, 0.9, 0.9, // O at (9,9,9) Å — far away
+            cart_coords: MatrixXx3::from_row_slice(&[
+                1.0, 1.0, 1.0, // C at (1,1,1) Å
+                9.0, 9.0, 9.0, // O at (9,9,9) Å — far away
             ]),
         };
-        let uc = UnitCell::cubic(10.0);
         let molecules = find_molecules(&atoms, Some(&uc), BondSettings::Default);
         assert_eq!(molecules.len(), 2);
         assert_eq!(molecules[0].n_atoms(), 1);
@@ -568,9 +585,9 @@ mod tests {
         let uc = UnitCell::cubic(10.0);
         let atoms = TestAtoms {
             atomic_nums: vec![6, 8], // C and O
-            frac_coords: MatrixXx3::from_row_slice(&[
-                0.5, 0.5, 0.5, // C at center
-                0.5, 0.5, 0.63, // O at 0.13*10 = 1.3 Å away along z
+            cart_coords: MatrixXx3::from_row_slice(&[
+                5.0, 5.0, 5.0, // C at center
+                5.0, 5.0, 6.3, // O at 1.3 Å away along z
             ]),
         };
         let molecules = find_molecules(&atoms, Some(&uc), BondSettings::Default);
@@ -582,15 +599,15 @@ mod tests {
     fn test_find_molecules_periodic_bonding() {
         // Two atoms at opposite edges of the cell that bond through the periodic boundary.
         // H-H bond: covalent radii H=0.31 => bond if dist < 0.31+0.31+0.45 = 1.07 Å
-        // Place one H at frac 0.02 and another at frac 0.95 along x in a 10 Å cell.
-        // Direct distance: (0.95 - 0.02) * 10 = 9.3 Å (too far)
-        // Periodic distance: (1.0 - 0.95 + 0.02) * 10 = 0.7 Å (bonds!)
+        // Place one H at cart 0.2 Å and another at 9.5 Å along x in a 10 Å cell.
+        // Direct distance: 9.5 - 0.2 = 9.3 Å (too far)
+        // Periodic distance: (10.0 - 9.5 + 0.2) = 0.7 Å (bonds!)
         let uc = UnitCell::cubic(10.0);
         let atoms = TestAtoms {
             atomic_nums: vec![1, 1], // H and H
-            frac_coords: MatrixXx3::from_row_slice(&[
-                0.02, 0.5, 0.5, // H near lower x boundary
-                0.95, 0.5, 0.5, // H near upper x boundary
+            cart_coords: MatrixXx3::from_row_slice(&[
+                0.2, 5.0, 5.0, // H near lower x boundary
+                9.5, 5.0, 5.0, // H near upper x boundary
             ]),
         };
         let molecules = find_molecules(&atoms, Some(&uc), BondSettings::Default);
@@ -604,34 +621,23 @@ mod tests {
 
     #[test]
     fn test_find_molecules_periodic_no_bond_without_cell() {
-        // Same atoms as above, but without a cell (no periodicity).
-        // Without periodicity, fractional coords are treated as Cartesian directly.
-        // The atoms at frac 0.02 and 0.95 are 0.93 units apart (treated as Å).
-        // H-H bond cutoff is 1.07 Å, so they WOULD bond. Use a different setup:
-        // place them far enough apart that they don't bond without periodicity.
+        // Two H atoms at opposite edges. With periodicity they bond (0.7 Å apart),
+        // without periodicity they don't (9.3 Å apart, direct Cartesian distance).
         let uc = UnitCell::cubic(10.0);
-
-        // With the cell, atoms bond across the boundary. Without cell, they don't
-        // (because direct Cartesian distance through the cell is too large).
         let atoms = TestAtoms {
             atomic_nums: vec![1, 1],
-            frac_coords: MatrixXx3::from_row_slice(&[0.02, 0.5, 0.5, 0.95, 0.5, 0.5]),
+            cart_coords: MatrixXx3::from_row_slice(&[
+                0.2, 5.0, 5.0, // H near lower x boundary
+                9.5, 5.0, 5.0, // H near upper x boundary
+            ]),
         };
 
         // With periodicity: should bond
         let mols_periodic = find_molecules(&atoms, Some(&uc), BondSettings::Default);
         assert_eq!(mols_periodic.len(), 1);
 
-        // Without periodicity: coords are raw fractional values (tiny numbers),
-        // the distance is 0.93 which is < 1.07 for H-H. So use a more extreme case.
-        let atoms_far = TestAtoms {
-            atomic_nums: vec![1, 1],
-            frac_coords: MatrixXx3::from_row_slice(&[
-                0.0, 0.0, 0.0, 5.0, 5.0,
-                5.0, // In no-cell mode, these are Cartesian: very far apart
-            ]),
-        };
-        let mols_no_cell = find_molecules::<_, UnitCell>(&atoms_far, None, BondSettings::Default);
+        // Without periodicity: direct distance is 9.3 Å, should NOT bond
+        let mols_no_cell = find_molecules::<_, UnitCell>(&atoms, None, BondSettings::Default);
         assert_eq!(
             mols_no_cell.len(),
             2,
@@ -641,14 +647,15 @@ mod tests {
 
     #[test]
     fn test_find_molecules_custom_radii_and_tolerance() {
-        // Place two C atoms at distance ~1.6 Å.
+        // Place two C atoms at distance 1.6 Å.
         // Default C radius = 0.76, so default bond cutoff = 0.76+0.76+0.45 = 1.97 Å -> bonds.
         // With a tiny tolerance of 0.0 Å, cutoff = 0.76+0.76+0.0 = 1.52 Å -> no bond at 1.6 Å.
         let uc = UnitCell::cubic(10.0);
         let atoms = TestAtoms {
             atomic_nums: vec![6, 6],
-            frac_coords: MatrixXx3::from_row_slice(&[
-                0.5, 0.5, 0.5, 0.5, 0.5, 0.66, // 1.6 Å apart along z
+            cart_coords: MatrixXx3::from_row_slice(&[
+                5.0, 5.0, 5.0, // C at center
+                5.0, 5.0, 6.6, // C at 1.6 Å apart along z
             ]),
         };
 
@@ -688,12 +695,12 @@ mod tests {
         let uc = UnitCell::cubic(20.0);
         let atoms = TestAtoms {
             atomic_nums: vec![6, 8, 7, 1, 1],
-            frac_coords: MatrixXx3::from_row_slice(&[
-                0.1, 0.1, 0.1, // C
-                0.1, 0.1, 0.16, // O at 1.2 Å from C (bonds: 0.76+0.66+0.45=1.87)
-                0.5, 0.5, 0.5, // N (isolated)
-                0.9, 0.9, 0.1, // H
-                0.9, 0.9, 0.13, // H at 0.6 Å from other H (bonds: 0.31+0.31+0.45=1.07)
+            cart_coords: MatrixXx3::from_row_slice(&[
+                2.0, 2.0, 2.0, // C
+                2.0, 2.0, 3.2, // O at 1.2 Å from C (bonds: 0.76+0.66+0.45=1.87)
+                10.0, 10.0, 10.0, // N (isolated)
+                18.0, 18.0, 2.0, // H
+                18.0, 18.0, 2.6, // H at 0.6 Å from other H (bonds: 0.31+0.31+0.45=1.07)
             ]),
         };
         let molecules = find_molecules(&atoms, Some(&uc), BondSettings::Default);
