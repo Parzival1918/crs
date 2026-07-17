@@ -1,9 +1,20 @@
 use nalgebra::MatrixXx3;
+use std::collections::HashMap;
+
+#[derive(Debug, Clone)]
+pub enum BondSettings {
+    /// Use the default covalent radii and a tolerance of 0.45 Å.
+    Default,
+    /// Use the default covalent radii and the provided tolerance.
+    DefaultWithTolerance(f64),
+    /// Use the provided covalent radii and tolerance.
+    CustomRadiiAndTolerance(HashMap<u8, f64>, f64),
+}
 
 #[derive(Debug, Clone)]
 pub struct Molecule {
-    pub atomic_nums: Vec<u8>,
-    pub cartesian_coords: MatrixXx3<f64>,
+    atomic_nums: Vec<u8>,
+    cartesian_coords: MatrixXx3<f64>,
 }
 
 impl Molecule {

@@ -1,4 +1,5 @@
 use crate::data::{get_atomic_mass, get_species_name};
+use crate::molecule::{Molecule, BondSettings};
 use crate::spacegroup::SymOp;
 use crate::traits::{AtomicData, CellData, FracAtomicData};
 use nalgebra::{Matrix3, MatrixXx3};
@@ -142,7 +143,8 @@ pub fn wrap_coordinates_in_place(frac_coords: &mut MatrixXx3<f64>) {
 pub fn find_molecules<A: AtomicData + FracAtomicData, C: CellData>(
     atoms: &A,
     cell: Option<&C>,
-) -> Vec<Vec<usize>> {
+    settings: BondSettings
+) -> Vec<Molecule> {
     unimplemented!()
 }
 
