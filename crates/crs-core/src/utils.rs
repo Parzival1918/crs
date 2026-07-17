@@ -1,6 +1,6 @@
 use crate::data::{get_atomic_mass, get_species_name};
 use crate::spacegroup::SymOp;
-use crate::traits::CellData;
+use crate::traits::{AtomicData, CellData, FracAtomicData};
 use nalgebra::{Matrix3, MatrixXx3};
 
 /// Generate a chemical formula from a list of atomic numbers
@@ -136,6 +136,16 @@ pub fn wrap_coordinates_in_place(frac_coords: &mut MatrixXx3<f64>) {
     frac_coords.apply(|x| *x -= x.floor())
 }
 
+/// Find molecules in a set of atoms, accept an Option<CellData> that if provided
+/// will use periodicity in the search for molecules. If None is provided,
+/// it will treat the atoms as a cluster and find molecules without periodicity.
+pub fn find_molecules<A: AtomicData + FracAtomicData, C: CellData>(
+    atoms: &A,
+    cell: Option<&C>,
+) -> Vec<Vec<usize>> {
+    unimplemented!()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,7 +209,10 @@ mod tests {
 
         let frac_coords = MatrixXx3::from_row_slice(&[0.5, 0.5, 0.5, 0.8, 0.2, 0.1]);
         let cart_coords = frac_to_cart(&frac_coords, &cell_matrix);
-        assert_eq!(cart_coords, MatrixXx3::from_row_slice(&[5.0, 5.0, 5.0, 8.0, 2.0, 1.0]));
+        assert_eq!(
+            cart_coords,
+            MatrixXx3::from_row_slice(&[5.0, 5.0, 5.0, 8.0, 2.0, 1.0])
+        );
 
         let uc = UnitCell::monoclinic(10.0, 5.0, 8.0, 75.0_f64.to_radians());
         let frac_coords = MatrixXx3::from_row_slice(&[0.5, 0.5, 0.5]);

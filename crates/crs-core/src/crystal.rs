@@ -26,8 +26,9 @@ impl Crystal {
         let mut fractional_coords = apply_symops(asymmetric_unit.frac_coords(), sym_ops);
         wrap_coordinates_in_place(&mut fractional_coords);
         let cartesian_coords = unit_cell.to_cartesian(&fractional_coords);
-        
-        let mut atomic_nums = Vec::with_capacity(asymmetric_unit.atomic_nums().len() * sym_ops.len());
+
+        let mut atomic_nums =
+            Vec::with_capacity(asymmetric_unit.atomic_nums().len() * sym_ops.len());
         for _ in 0..sym_ops.len() {
             atomic_nums.extend_from_slice(asymmetric_unit.atomic_nums());
         }
@@ -44,10 +45,7 @@ impl Crystal {
 
     /// Compute the chemical formula of the full crystal contents.
     fn formula(&self) -> String {
-        chemical_formula(
-            self.atomic_nums(),
-            self.space_group.n_symops() as usize,
-        )
+        chemical_formula(self.atomic_nums(), self.space_group.n_symops() as usize)
     }
 
     pub fn unit_cell(&self) -> &UnitCell {
