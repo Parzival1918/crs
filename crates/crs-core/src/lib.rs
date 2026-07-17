@@ -5,6 +5,7 @@ mod au;
 mod crystal;
 mod data;
 mod errors;
+mod molecule;
 mod spacegroup;
 mod traits;
 mod unitcell;
