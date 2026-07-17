@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 // Defaults
 pub const DEFAULT_DIST_TOL: f64 = 1e-5;
 pub const DEFAULT_ANG_TOL: f64 = 1e-3;
@@ -32,6 +34,14 @@ pub fn get_covalent_radius(atomic_num: u8) -> f64 {
     } else {
         COVALENT_RADII[atomic_num as usize]
     }
+}
+
+pub fn get_default_covalent_radii_map() -> HashMap<u8, f64> {
+    let mut radii_map = HashMap::new();
+    for (atomic_num, &radius) in COVALENT_RADII.iter().enumerate() {
+        radii_map.insert(atomic_num as u8, radius);
+    }
+    radii_map
 }
 
 /// List of species names in order of atomic numbers

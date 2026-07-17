@@ -177,45 +177,6 @@ impl UnionFind {
     }
 }
 
-/// Resolve the covalent radii and tolerance from `BondSettings`.
-///
-/// Returns `(radii_per_atom, tolerance, max_cutoff)` where `max_cutoff` is the
-/// largest possible bonding distance across all atom pairs.
-fn resolve_bond_params(atomic_nums: &[u8], settings: &BondSettings) -> (Vec<f64>, f64, f64) {
-    let (radii, tolerance) = match settings {
-        BondSettings::Default => {
-            let radii: Vec<f64> = atomic_nums
-                .iter()
-                .map(|&z| get_covalent_radius(z))
-                .collect();
-            (radii, 0.45)
-        }
-        BondSettings::DefaultWithTolerance(tol) => {
-            let radii: Vec<f64> = atomic_nums
-                .iter()
-                .map(|&z| get_covalent_radius(z))
-                .collect();
-            (radii, *tol)
-        }
-        BondSettings::CustomRadiiAndTolerance(custom_radii, tol) => {
-            let radii: Vec<f64> = atomic_nums
-                .iter()
-                .map(|&z| {
-                    custom_radii
-                        .get(&z)
-                        .copied()
-                        .unwrap_or_else(|| get_covalent_radius(z))
-                })
-                .collect();
-            (radii, *tol)
-        }
-    };
-
-    let max_radius = radii.iter().cloned().fold(0.0_f64, f64::max);
-    let max_cutoff = 2.0 * max_radius + tolerance;
-    (radii, tolerance, max_cutoff)
-}
-
 /// Compute the face normals (unit vectors), perpendicular heights, and lattice
 /// vectors of the unit cell. All quantities are in Cartesian space.
 ///
@@ -262,7 +223,7 @@ fn compute_cell_face_geometry(cell: &impl CellData) -> ([[f64; 3]; 3], [f64; 3],
 pub fn find_molecules<A: AtomicData + CartAtomicData, C: CellData>(
     atoms: &A,
     cell: Option<&C>,
-    settings: BondSettings,
+    bond_settings: BondSettings,
 ) -> Vec<Molecule> {
     let atomic_nums = atoms.atomic_nums();
     let n_atoms = atomic_nums.len();
@@ -270,7 +231,7 @@ pub fn find_molecules<A: AtomicData + CartAtomicData, C: CellData>(
         return Vec::new();
     }
 
-    let (radii, tolerance, max_cutoff) = resolve_bond_params(atomic_nums, &settings);
+    let (radii, tolerance, max_cutoff) = bond_settings.resolve_bond_params(atomic_nums);
 
     let cart_coords = atoms.cartesian_coords();
 
