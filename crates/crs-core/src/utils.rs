@@ -307,6 +307,7 @@ pub fn find_molecules<A: AtomicData + CartAtomicData, C: CellData>(
 
     // Find bonds using kd-tree range queries + union-find.
     let mut uf = UnionFind::new(n_atoms);
+    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n_atoms];
     let max_cutoff_sq = max_cutoff * max_cutoff;
 
     for i in 0..n_atoms {
@@ -329,6 +330,8 @@ pub fn find_molecules<A: AtomicData + CartAtomicData, C: CellData>(
             let bond_cutoff = r_i + r_j + tolerance;
             if *dist_sq < bond_cutoff * bond_cutoff {
                 uf.union(i, j);
+                adj[i].push(j);
+                adj[j].push(i);
             }
         }
     }
@@ -346,8 +349,66 @@ pub fn find_molecules<A: AtomicData + CartAtomicData, C: CellData>(
         .into_values()
         .map(|indices| {
             let mol_atomic_nums: Vec<u8> = indices.iter().map(|&i| atomic_nums[i]).collect();
-            let mol_coords =
-                MatrixXx3::from_fn(indices.len(), |row, col| cart_coords[(indices[row], col)]);
+            let mut mol_coords = MatrixXx3::zeros(indices.len());
+            let mut unrolled = vec![false; n_atoms];
+            let mut queue = std::collections::VecDeque::new();
+
+            // Map original index to the row in mol_coords
+            let mut idx_to_row = std::collections::HashMap::new();
+            for (row, &idx) in indices.iter().enumerate() {
+                idx_to_row.insert(idx, row);
+            }
+
+            let start_idx = indices[0];
+            queue.push_back(start_idx);
+            unrolled[start_idx] = true;
+
+            // Set the first atom's coordinates to its original Cartesian coordinates
+            let start_row = idx_to_row[&start_idx];
+            mol_coords[(start_row, 0)] = cart_coords[(start_idx, 0)];
+            mol_coords[(start_row, 1)] = cart_coords[(start_idx, 1)];
+            mol_coords[(start_row, 2)] = cart_coords[(start_idx, 2)];
+
+            while let Some(u) = queue.pop_front() {
+                let u_row = idx_to_row[&u];
+                let p_u_mat = MatrixXx3::from_row_slice(&[
+                    mol_coords[(u_row, 0)],
+                    mol_coords[(u_row, 1)],
+                    mol_coords[(u_row, 2)],
+                ]);
+
+                for &v in &adj[u] {
+                    if !unrolled[v] {
+                        unrolled[v] = true;
+                        queue.push_back(v);
+
+                        let v_row = idx_to_row[&v];
+                        let p_v_mat = MatrixXx3::from_row_slice(&[
+                            cart_coords[(v, 0)],
+                            cart_coords[(v, 1)],
+                            cart_coords[(v, 2)],
+                        ]);
+
+                        if let Some(c) = cell {
+                            let f_u = cart_to_frac(&p_u_mat, c);
+                            let f_v = cart_to_frac(&p_v_mat, c);
+                            let mut df = &f_v - &f_u;
+                            df.apply(|x| *x -= x.round());
+                            let f_v_unrolled = f_u + df;
+                            let p_v_unrolled = frac_to_cart(&f_v_unrolled, c);
+
+                            mol_coords[(v_row, 0)] = p_v_unrolled[(0, 0)];
+                            mol_coords[(v_row, 1)] = p_v_unrolled[(0, 1)];
+                            mol_coords[(v_row, 2)] = p_v_unrolled[(0, 2)];
+                        } else {
+                            mol_coords[(v_row, 0)] = p_v_mat[(0, 0)];
+                            mol_coords[(v_row, 1)] = p_v_mat[(0, 1)];
+                            mol_coords[(v_row, 2)] = p_v_mat[(0, 2)];
+                        }
+                    }
+                }
+            }
+
             Molecule::new(mol_atomic_nums, mol_coords)
         })
         .collect();
@@ -670,5 +731,87 @@ mod tests {
         assert_eq!(molecules[0].n_atoms(), 2);
         assert_eq!(molecules[1].n_atoms(), 2);
         assert_eq!(molecules[2].n_atoms(), 1);
+    }
+    #[test]
+    fn test_find_molecules_unroll_benzene() {
+        let uc = UnitCell::cubic(10.0);
+        let mut atomic_nums = vec![6; 6];
+        atomic_nums.extend(vec![1; 6]);
+
+        let mut coords = vec![];
+
+        let r_c = 1.40;
+        let r_h = 2.49;
+
+        for i in 0..6 {
+            let angle = (i as f64) * std::f64::consts::PI / 3.0;
+            coords.push([r_c * angle.cos(), r_c * angle.sin(), 0.0]);
+        }
+        for i in 0..6 {
+            let angle = (i as f64) * std::f64::consts::PI / 3.0;
+            coords.push([r_h * angle.cos(), r_h * angle.sin(), 0.0]);
+        }
+        println!("Initial atom coordinates:");
+        for row in coords.iter() {
+            println!("Atom coords: {:}, {:}, {:}", row[0], row[1], row[2]);
+        }
+
+        // Shift center to boundary and wrap to force splitting across periodic boundary
+        for p in coords.iter_mut() {
+            p[0] = (p[0] + 9.5).rem_euclid(10.0);
+            p[1] = (p[1] + 9.5).rem_euclid(10.0);
+            p[2] = (p[2] + 9.5).rem_euclid(10.0);
+        }
+
+        let cart_coords = MatrixXx3::from_fn(12, |r, c| coords[r][c]);
+        let atoms = TestAtoms {
+            atomic_nums,
+            cart_coords,
+        };
+
+        let molecules = find_molecules(&atoms, Some(&uc), BondSettings::Default);
+
+        assert_eq!(
+            molecules.len(),
+            1,
+            "Benzene should be found as a single molecule"
+        );
+
+        let mol = &molecules[0];
+        assert_eq!(mol.n_atoms(), 12);
+
+        // Check that the unrolled molecule doesn't have artificially large internal distances
+        let mol_coords = mol.cartesian_coords();
+        println!("Unrolled molecule coordinates:");
+        for row in mol_coords.row_iter() {
+            println!("Atom coords: {:}, {:}, {:}", row[0], row[1], row[2]);
+        }
+        let mut max_dist = 0.0_f64;
+        for i in 0..12 {
+            for j in 0..i {
+                let p_i = nalgebra::Vector3::new(
+                    mol_coords[(i, 0)],
+                    mol_coords[(i, 1)],
+                    mol_coords[(i, 2)],
+                );
+                let p_j = nalgebra::Vector3::new(
+                    mol_coords[(j, 0)],
+                    mol_coords[(j, 1)],
+                    mol_coords[(j, 2)],
+                );
+                let dist = (p_i - p_j).norm();
+                if dist > max_dist {
+                    max_dist = dist;
+                }
+            }
+        }
+
+        // Maximum distance in benzene is between opposite H atoms: 2.49 * 2 = 4.98 A.
+        // Unrolling ensures atoms are grouped tightly. Without unrolling, max_dist > 8.0 A.
+        assert!(
+            max_dist < 5.0,
+            "Molecule atoms are too far apart, unrolling failed! Max dist: {}",
+            max_dist
+        );
     }
 }

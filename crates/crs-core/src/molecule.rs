@@ -1,7 +1,7 @@
-use nalgebra::MatrixXx3;
-use std::collections::HashMap;
 use crate::data::get_default_covalent_radii_map;
 use crate::traits::{AtomicData, CartAtomicData};
+use nalgebra::MatrixXx3;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub enum BondSettings {
@@ -40,10 +40,12 @@ impl BondSettings {
         let mut max_cutoff: f64 = 0.0;
 
         for &atomic_num in atomic_nums {
-            let radius = radii_map
-                .get(&atomic_num)
-                .copied()
-                .unwrap_or_else(|| panic!("Covalent radius not found for atomic number: {}", atomic_num));
+            let radius = radii_map.get(&atomic_num).copied().unwrap_or_else(|| {
+                panic!(
+                    "Covalent radius not found for atomic number: {}",
+                    atomic_num
+                )
+            });
             radii_per_atom.push(radius);
             max_cutoff = max_cutoff.max(2.0 * radius + tolerance);
         }
