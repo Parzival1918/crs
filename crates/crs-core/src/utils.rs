@@ -119,7 +119,11 @@ pub fn apply_symops(frac_coords: &MatrixXx3<f64>, sym_ops: &[SymOp]) -> MatrixXx
     let mut new_coords = MatrixXx3::zeros(frac_coords.nrows() * sym_ops.len());
     for (i, op) in sym_ops.iter().enumerate() {
         let rotated = frac_coords * op.rotation();
-        let translated = rotated + op.translation().transpose();
+        let mut translated = rotated;
+        let trans_row = op.translation().transpose();
+        for mut row in translated.row_iter_mut() {
+            row += trans_row;
+        }
         new_coords
             .view_mut((i * frac_coords.nrows(), 0), (frac_coords.nrows(), 3))
             .copy_from(&translated);
@@ -193,9 +197,9 @@ mod tests {
         let angles = [FRAC_PI_2, FRAC_PI_2, FRAC_PI_2];
         let (cell_matrix, _, volume) = cell_matrix_and_volume(lengths, angles);
 
-        let frac_coords = MatrixXx3::from_row_slice(&[0.5, 0.5, 0.5]);
+        let frac_coords = MatrixXx3::from_row_slice(&[0.5, 0.5, 0.5, 0.8, 0.2, 0.1]);
         let cart_coords = frac_to_cart(&frac_coords, &cell_matrix);
-        assert_eq!(cart_coords, MatrixXx3::from_row_slice(&[5.0, 5.0, 5.0]));
+        assert_eq!(cart_coords, MatrixXx3::from_row_slice(&[5.0, 5.0, 5.0, 8.0, 2.0, 1.0]));
 
         let uc = UnitCell::monoclinic(10.0, 5.0, 8.0, 75.0_f64.to_radians());
         let frac_coords = MatrixXx3::from_row_slice(&[0.5, 0.5, 0.5]);

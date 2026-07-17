@@ -3,13 +3,17 @@ use crate::data::{ANGSTROM3_TO_CM3, AVOGADRO_NUMBER};
 use crate::spacegroup::SpaceGroup;
 use crate::traits::{AtomicData, CartAtomicData, CellData, FracAtomicData};
 use crate::unitcell::UnitCell;
-use crate::utils::{chemical_formula, molar_mass};
+use crate::utils::{apply_symops, chemical_formula, molar_mass, wrap_coordinates_in_place};
+use nalgebra::{Matrix3, MatrixXx3};
 
 #[derive(Debug, Clone)]
 pub struct Crystal {
     unit_cell: UnitCell,
     space_group: SpaceGroup,
     asymmetric_unit: AsymmetricUnit,
+    atomic_nums: Vec<u8>,
+    fractional_coords: MatrixXx3<f64>,
+    cartesian_coords: MatrixXx3<f64>,
 }
 
 impl Crystal {
@@ -18,10 +22,23 @@ impl Crystal {
         space_group: SpaceGroup,
         asymmetric_unit: AsymmetricUnit,
     ) -> Self {
+        let sym_ops = space_group.operations();
+        let mut fractional_coords = apply_symops(asymmetric_unit.frac_coords(), sym_ops);
+        wrap_coordinates_in_place(&mut fractional_coords);
+        let cartesian_coords = unit_cell.to_cartesian(&fractional_coords);
+        
+        let mut atomic_nums = Vec::with_capacity(asymmetric_unit.atomic_nums().len() * sym_ops.len());
+        for _ in 0..sym_ops.len() {
+            atomic_nums.extend_from_slice(asymmetric_unit.atomic_nums());
+        }
+
         Self {
             unit_cell,
             space_group,
             asymmetric_unit,
+            atomic_nums,
+            fractional_coords,
+            cartesian_coords,
         }
     }
 
@@ -51,31 +68,26 @@ impl Crystal {
         let volume = self.unit_cell.volume(); // Volume in cubic angstroms
         total_mass / (volume * ANGSTROM3_TO_CM3) // Convert volume to cubic centimeters and calculate density in g/cm^3
     }
-
-    /// Atomic numbers of the full cell contents.
-    pub fn atomic_nums(&self) -> &[u8] {
-        unimplemented!()
-    }
 }
 
 impl AtomicData for Crystal {
     /// Atomic numbers of the full cell contents.
     fn atomic_nums(&self) -> &[u8] {
-        self.atomic_nums()
+        &self.atomic_nums
     }
 }
 
 impl CartAtomicData for Crystal {
     /// Cartesian coordinates of the full cell contents.
-    fn cartesian_coords(&self) -> &nalgebra::MatrixXx3<f64> {
-        unimplemented!()
+    fn cartesian_coords(&self) -> &MatrixXx3<f64> {
+        &self.cartesian_coords
     }
 }
 
 impl FracAtomicData for Crystal {
     /// Fractional coordinates of the full cell contents.
-    fn fractional_coords(&self) -> &nalgebra::MatrixXx3<f64> {
-        unimplemented!()
+    fn fractional_coords(&self) -> &MatrixXx3<f64> {
+        &self.fractional_coords
     }
 }
 
@@ -88,7 +100,7 @@ mod tests {
         let unit_cell = UnitCell::cubic(5.0);
         let space_group = SpaceGroup::default_setting(1);
         let atomic_nums = vec![6, 1, 1, 1, 1]; // CH4
-        let frac_coords = nalgebra::MatrixXx3::repeat(5, 0.0);
+        let frac_coords = MatrixXx3::repeat(5, 0.0);
         let asymmetric_unit = AsymmetricUnit::new(atomic_nums, frac_coords);
         let crystal = Crystal::new(unit_cell, space_group, asymmetric_unit);
         assert_eq!(
@@ -104,7 +116,7 @@ mod tests {
         let unit_cell = UnitCell::cubic(5.0);
         let space_group = SpaceGroup::default_setting(1);
         let atomic_nums = vec![6, 1, 1, 1, 1]; // CH4
-        let frac_coords = nalgebra::MatrixXx3::repeat(5, 0.0);
+        let frac_coords = MatrixXx3::repeat(5, 0.0);
         let asymmetric_unit = AsymmetricUnit::new(atomic_nums, frac_coords);
         let crystal = Crystal::new(unit_cell, space_group, asymmetric_unit);
         let density = crystal.density();
