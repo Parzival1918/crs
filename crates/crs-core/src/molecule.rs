@@ -78,6 +78,18 @@ impl AtomicData for Molecule {
     fn atomic_nums(&self) -> &[u8] {
         &self.atomic_nums
     }
+
+    fn covalent_radii(&self) -> Vec<f64> {
+        let radii_map = get_default_covalent_radii_map();
+        self.atomic_nums
+            .iter()
+            .map(|&num| {
+                radii_map.get(&num).copied().unwrap_or_else(|| {
+                    panic!("Covalent radius not found for atomic number: {}", num)
+                })
+            })
+            .collect()
+    }
 }
 
 impl CartAtomicData for Molecule {

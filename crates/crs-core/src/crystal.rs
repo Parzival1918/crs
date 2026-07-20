@@ -1,9 +1,10 @@
 use crate::au::AsymmetricUnit;
 use crate::data::{ANGSTROM3_TO_CM3, AVOGADRO_NUMBER};
 use crate::spacegroup::SpaceGroup;
-use crate::traits::{AtomicData, CartAtomicData, CellData, FracAtomicData};
+use crate::traits::{AtomicData, CartAtomicData, CellData, PeriodicAtomicData, SupercellData};
 use crate::unitcell::UnitCell;
-use crate::utils::{apply_symops, chemical_formula, molar_mass, wrap_coordinates_in_place};
+use crate::utils::{apply_symops, chemical_formula, molar_mass, wrap_coordinates_in_place, frac_to_cart, cart_to_frac};
+use moyo::base::Cell;
 use nalgebra::{Matrix3, MatrixXx3};
 
 #[derive(Debug, Clone)]
@@ -73,6 +74,10 @@ impl AtomicData for Crystal {
     fn atomic_nums(&self) -> &[u8] {
         &self.atomic_nums
     }
+
+    fn covalent_radii(&self) -> Vec<f64> {
+        unimplemented!()
+    }
 }
 
 impl CartAtomicData for Crystal {
@@ -82,11 +87,46 @@ impl CartAtomicData for Crystal {
     }
 }
 
-impl FracAtomicData for Crystal {
+impl CellData for Crystal {
+    fn lengths(&self) -> [f64; 3] {
+        self.unit_cell.lengths()
+    }
+
+    fn angles(&self) -> [f64; 3] {
+        self.unit_cell.angles()
+    }
+
+    fn cell_matrix(&self) -> Matrix3<f64> {
+        self.unit_cell.cell_matrix()
+    }
+
+    fn inv_cell_matrix(&self) -> Matrix3<f64> {
+        self.unit_cell.inv_cell_matrix()
+    }
+
+    fn volume(&self) -> f64 {
+        self.unit_cell.volume()
+    }
+
+    fn to_cartesian(&self, frac_coords: &MatrixXx3<f64>) -> MatrixXx3<f64> {
+        frac_to_cart(frac_coords, self)
+    }
+
+    fn to_fractional(&self, cart_coords: &MatrixXx3<f64>) -> MatrixXx3<f64> {
+        cart_to_frac(cart_coords, self)
+    }
+}
+
+impl PeriodicAtomicData for Crystal {
     /// Fractional coordinates of the full cell contents.
     fn fractional_coords(&self) -> &MatrixXx3<f64> {
         &self.fractional_coords
     }
+}
+
+pub struct SupercellCrystal {
+    crystal: Crystal,
+    supercell_data: Box<dyn SupercellData>,
 }
 
 #[cfg(test)]

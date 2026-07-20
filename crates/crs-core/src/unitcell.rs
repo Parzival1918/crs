@@ -1,14 +1,14 @@
 use crate::data::{DEFAULT_ANG_TOL, DEFAULT_DIST_TOL};
 use crate::traits::CellData;
 use crate::utils::{cart_to_frac, cell_matrix_and_volume, frac_to_cart};
-use core::f64::consts::FRAC_PI_2;
+use core::f64::consts::{FRAC_PI_2, FRAC_PI_3};
 use moyo::base::Cell;
 use nalgebra::{Matrix3, MatrixXx3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CellType {
     Cubic,
-    Rombohedral,
+    Rhombohedral,
     Hexagonal,
     Tetragonal,
     Orthorhombic,
@@ -64,7 +64,7 @@ impl UnitCell {
     pub fn hexagonal(a: f64, c: f64) -> Self {
         Self::new(
             [a, a, c],
-            [FRAC_PI_2, FRAC_PI_2, 2.0 * std::f64::consts::PI / 3.0],
+            [FRAC_PI_2, FRAC_PI_2, FRAC_PI_3],
         )
     }
 
@@ -79,136 +79,75 @@ impl UnitCell {
     pub fn triclinic(a: f64, b: f64, c: f64, alpha: f64, beta: f64, gamma: f64) -> Self {
         Self::new([a, b, c], [alpha, beta, gamma])
     }
+}
 
-    pub fn a(&self) -> f64 {
-        self.lengths[0]
+impl CellData for UnitCell {
+    fn cell_matrix(&self) -> Matrix3<f64> {
+        self.matrix.clone()
     }
 
-    pub fn b(&self) -> f64 {
-        self.lengths[1]
+    fn inv_cell_matrix(&self) -> Matrix3<f64> {
+        self.inv_matrix.clone()
     }
 
-    pub fn c(&self) -> f64 {
-        self.lengths[2]
-    }
-
-    pub fn alpha(&self) -> f64 {
-        self.angles[0]
-    }
-
-    pub fn beta(&self) -> f64 {
-        self.angles[1]
-    }
-
-    pub fn gamma(&self) -> f64 {
-        self.angles[2]
-    }
-
-    pub fn matrix(&self) -> &Matrix3<f64> {
-        &self.matrix
-    }
-
-    pub fn volume(&self) -> f64 {
+    fn volume(&self) -> f64 {
         self.volume
     }
 
-    fn abc_close(&self) -> bool {
-        (self.a() - self.b()).abs() < DEFAULT_DIST_TOL
-            && (self.a() - self.c()).abs() < DEFAULT_DIST_TOL
-            && (self.b() - self.c()).abs() < DEFAULT_DIST_TOL
+    fn lengths(&self) -> [f64; 3] {
+        self.lengths
     }
 
-    fn abc_different(&self) -> bool {
-        (self.a() - self.b()).abs() > DEFAULT_DIST_TOL
-            && (self.a() - self.c()).abs() > DEFAULT_DIST_TOL
-            && (self.b() - self.c()).abs() > DEFAULT_DIST_TOL
+    fn angles(&self) -> [f64; 3] {
+        self.angles
     }
 
-    fn ab_close_c_different(&self) -> bool {
-        (self.a() - self.b()).abs() < DEFAULT_DIST_TOL
-            && (self.a() - self.c()).abs() > DEFAULT_DIST_TOL
-            && (self.b() - self.c()).abs() > DEFAULT_DIST_TOL
-    }
-
-    fn orthogonal_angles(&self) -> bool {
-        (self.alpha() - FRAC_PI_2).abs() < DEFAULT_ANG_TOL
-            && (self.beta() - FRAC_PI_2).abs() < DEFAULT_ANG_TOL
-            && (self.gamma() - FRAC_PI_2).abs() < DEFAULT_ANG_TOL
-    }
-
-    fn angles_close(&self) -> bool {
-        (self.alpha() - self.beta()).abs() < DEFAULT_ANG_TOL
-            && (self.alpha() - self.gamma()).abs() < DEFAULT_ANG_TOL
-            && (self.beta() - self.gamma()).abs() < DEFAULT_ANG_TOL
-    }
-
-    pub fn cell_type(&self) -> CellType {
-        if self.abc_close() && self.orthogonal_angles() {
-            CellType::Cubic
-        } else if self.abc_close()
-            && self.angles_close()
-            && (self.alpha() - FRAC_PI_2).abs() > DEFAULT_ANG_TOL
-        {
-            CellType::Rombohedral
-        } else if self.ab_close_c_different()
-            && (self.alpha() - FRAC_PI_2).abs() < DEFAULT_ANG_TOL
-            && (self.beta() - FRAC_PI_2).abs() < DEFAULT_ANG_TOL
-            && (self.gamma() - FRAC_PI_2).abs() > DEFAULT_ANG_TOL
-        {
-            CellType::Hexagonal
-        } else if self.ab_close_c_different() && self.orthogonal_angles() {
-            CellType::Tetragonal
-        } else if self.abc_different() && self.orthogonal_angles() {
-            CellType::Orthorhombic
-        } else if self.abc_different()
-            && (self.alpha() - FRAC_PI_2).abs() < DEFAULT_ANG_TOL
-            && (self.beta() - FRAC_PI_2).abs() > DEFAULT_ANG_TOL
-            && (self.gamma() - FRAC_PI_2).abs() < DEFAULT_ANG_TOL
-        {
-            CellType::Monoclinic
-        } else {
-            CellType::Triclinic
-        }
-    }
-
-    pub fn inverse_matrix(&self) -> &Matrix3<f64> {
-        &self.inv_matrix
-    }
-
-    pub fn to_cartesian(&self, frac_coords: &MatrixXx3<f64>) -> MatrixXx3<f64> {
+    fn to_cartesian(&self, frac_coords: &MatrixXx3<f64>) -> MatrixXx3<f64> {
         frac_to_cart(frac_coords, self)
     }
 
-    pub fn to_fractional(&self, cart_coords: &MatrixXx3<f64>) -> MatrixXx3<f64> {
+    fn to_fractional(&self, cart_coords: &MatrixXx3<f64>) -> MatrixXx3<f64> {
         cart_to_frac(cart_coords, self)
     }
 }
 
-impl CellData for UnitCell {
-    fn cell_matrix(&self) -> &Matrix3<f64> {
-        self.matrix()
-    }
-
-    fn inv_cell_matrix(&self) -> &Matrix3<f64> {
-        self.inverse_matrix()
-    }
-
-    fn volume(&self) -> f64 {
-        self.volume
-    }
-}
-
 impl CellData for Matrix3<f64> {
-    fn cell_matrix(&self) -> &Matrix3<f64> {
-        self
+    fn cell_matrix(&self) -> Matrix3<f64> {
+        self.clone()
     }
 
-    fn inv_cell_matrix(&self) -> &Matrix3<f64> {
-        self
+    fn inv_cell_matrix(&self) -> Matrix3<f64> {
+        self.try_inverse()
+            .expect("Matrix is not invertible")
+            .clone()
     }
 
     fn volume(&self) -> f64 {
         self.determinant()
+    }
+
+    fn lengths(&self) -> [f64; 3] {
+        [self.row(0).norm(), self.row(1).norm(), self.row(2).norm()]
+    }
+
+    fn angles(&self) -> [f64; 3] {
+        let a = self.row(0);
+        let b = self.row(1);
+        let c = self.row(2);
+
+        let alpha = (b.dot(&c) / (b.norm() * c.norm())).acos();
+        let beta = (a.dot(&c) / (a.norm() * c.norm())).acos();
+        let gamma = (a.dot(&b) / (a.norm() * b.norm())).acos();
+
+        [alpha, beta, gamma]
+    }
+
+    fn to_cartesian(&self, frac_coords: &MatrixXx3<f64>) -> MatrixXx3<f64> {
+        frac_to_cart(frac_coords, self)
+    }
+
+    fn to_fractional(&self, cart_coords: &MatrixXx3<f64>) -> MatrixXx3<f64> {
+        cart_to_frac(cart_coords, self)
     }
 }
 
@@ -227,7 +166,7 @@ mod tests {
         let lengths = [1.0, 1.0, 1.0];
         let angles = [FRAC_PI_3, FRAC_PI_3, FRAC_PI_3];
         let cell = UnitCell::new(lengths, angles);
-        assert_eq!(cell.cell_type(), CellType::Rombohedral);
+        assert_eq!(cell.cell_type(), CellType::Rhombohedral);
 
         let cell = UnitCell::hexagonal(1.0, 2.0);
         assert_eq!(cell.cell_type(), CellType::Hexagonal);

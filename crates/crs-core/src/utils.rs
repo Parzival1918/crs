@@ -500,7 +500,7 @@ mod tests {
         let (cell_matrix, inv_matrix, _) = cell_matrix_and_volume(lengths, angles);
 
         let cart_coords = MatrixXx3::from_row_slice(&[5.0, 5.0, 5.0]);
-        let frac_coords = cart_to_frac(&cart_coords, &inv_matrix);
+        let frac_coords = cart_to_frac(&cart_coords, &cell_matrix);
         assert!((frac_coords - MatrixXx3::from_row_slice(&[0.5, 0.5, 0.5])).norm() < 1e-6);
 
         let uc = UnitCell::monoclinic(10.0, 5.0, 8.0, 75.0_f64.to_radians());
@@ -563,6 +563,13 @@ mod tests {
     impl AtomicData for TestAtoms {
         fn atomic_nums(&self) -> &[u8] {
             &self.atomic_nums
+        }
+
+        fn covalent_radii(&self) -> Vec<f64> {
+            self.atomic_nums
+                .iter()
+                .map(|&num| get_covalent_radius(num))
+                .collect()
         }
     }
 
