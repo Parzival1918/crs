@@ -147,6 +147,7 @@ pub trait CartAtomicData: AtomicData {
 
 pub trait PeriodicAtomicData: AtomicData + CellData + CartAtomicData {
     fn fractional_coords(&self) -> &MatrixXx3<f64>;
+    fn density(&self) -> f64;
     // fn wrap_fractional_coords(&mut self) {
     //     wrap_coordinates_in_place(self.fractional_coords_mut());
     // }

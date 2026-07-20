@@ -60,13 +60,6 @@ impl Crystal {
     pub fn asymmetric_unit(&self) -> &AsymmetricUnit {
         &self.asymmetric_unit
     }
-
-    pub fn density(&self) -> f64 {
-        let au_mass = molar_mass(self.asymmetric_unit.atomic_nums()) / AVOGADRO_NUMBER; // Convert to kg
-        let total_mass = au_mass * self.space_group().n_symops() as f64; // Total mass in kg
-        let volume = self.unit_cell.volume(); // Volume in cubic angstroms
-        total_mass / (volume * ANGSTROM3_TO_CM3) // Convert volume to cubic centimeters and calculate density in g/cm^3
-    }
 }
 
 impl AtomicData for Crystal {
@@ -121,6 +114,13 @@ impl PeriodicAtomicData for Crystal {
     /// Fractional coordinates of the full cell contents.
     fn fractional_coords(&self) -> &MatrixXx3<f64> {
         &self.fractional_coords
+    }
+
+    fn density(&self) -> f64 {
+        let au_mass = molar_mass(self.asymmetric_unit.atomic_nums()) / AVOGADRO_NUMBER; // Convert to kg
+        let total_mass = au_mass * self.space_group().n_symops() as f64; // Total mass in kg
+        let volume = self.unit_cell.volume(); // Volume in cubic angstroms
+        total_mass / (volume * ANGSTROM3_TO_CM3) // Convert volume to cubic centimeters and calculate density in g/cm^3
     }
 }
 
