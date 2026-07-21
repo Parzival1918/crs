@@ -160,6 +160,20 @@ impl Writer for XYZFrame {
     }
 }
 
+impl TryFrom<&str> for XYZFrame {
+    type Error = XYZError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let mut input: &str = s;
+        let presult = parser::parse_frame(&mut input).map_err(|e| XYZError::ParseError(e.to_string()))?;
+        if let Some(result) = presult {
+            Ok(result)
+        } else {
+            Err(XYZError::ParseError("Failed to parse XYZ frame".into()))
+        }
+    }
+}
+
 impl TryFrom<XYZFrame> for Molecule {
     type Error = XYZError;
 
