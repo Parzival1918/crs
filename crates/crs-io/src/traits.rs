@@ -63,63 +63,20 @@ pub trait Parser<T> {
 }
 
 /// A trait for writing atomic data (like `Molecule` or `Crystal`) to a data sink.
-pub trait Writer<T> {
+pub trait Writer {
     /// Write a single item to a writer.
-    fn write_to_writer<W: Write>(&self, data: &T, writer: &mut W) -> IoResult<()>;
-
-    /// Write multiple items to a writer.
-    fn write_many_to_writer<'a, W: Write, I: IntoIterator<Item = &'a T>>(
-        &self,
-        data: I,
-        mut writer: W,
-    ) -> IoResult<()>
-    where
-        T: 'a,
-    {
-        for item in data {
-            self.write_to_writer(item, &mut writer)?;
-        }
-        Ok(())
-    }
+    fn write_to_writer<W: Write>(&self, writer: &mut W) -> IoResult<()>;
 
     /// Write a single item to a file. Provides a default implementation.
-    fn write_to_file<P: AsRef<Path>>(&self, data: &T, path: P) -> IoResult<()> {
+    fn write_to_file<P: AsRef<Path>>(&self, path: P) -> IoResult<()> {
         let mut file = File::create(path)?;
-        self.write_to_writer(data, &mut file)
-    }
-
-    /// Write multiple items to a file.
-    fn write_many_to_file<'a, P: AsRef<Path>, I: IntoIterator<Item = &'a T>>(
-        &self,
-        data: I,
-        path: P,
-    ) -> IoResult<()>
-    where
-        T: 'a,
-    {
-        let mut file = File::create(path)?;
-        for item in data {
-            self.write_to_writer(item, &mut file)?;
-        }
-        Ok(())
+        self.write_to_writer(&mut file)
     }
 
     /// Write a single item to a string. Provides a default implementation.
-    fn write_to_string(&self, data: &T) -> IoResult<String> {
+    fn write_to_string(&self) -> IoResult<String> {
         let mut buf = Vec::new();
-        self.write_to_writer(data, &mut buf)?;
-        String::from_utf8(buf).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-    }
-
-    /// Write multiple items to a string.
-    fn write_many_to_string<'a, I: IntoIterator<Item = &'a T>>(&self, data: I) -> IoResult<String>
-    where
-        T: 'a,
-    {
-        let mut buf = Vec::new();
-        for item in data {
-            self.write_to_writer(item, &mut buf)?;
-        }
+        self.write_to_writer(&mut buf)?;
         String::from_utf8(buf).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 }
