@@ -1,3 +1,4 @@
+use crate::traits::{Parser, Writer};
 use crs_core::au::AsymmetricUnit;
 use crs_core::crystal::Crystal;
 use crs_core::data::SPECIES_NAMES;
@@ -14,7 +15,7 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
-use crate::traits::{Parser, Writer};
+mod parser;
 
 #[derive(Debug, ThisError)]
 pub enum XYZError {
@@ -30,6 +31,8 @@ pub enum XYZError {
     UnterminatedLattice,
     #[error("Lattice must have 9 elements")]
     InvalidLattice,
+    #[error("Parse error: {0}")]
+    ParseError(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -94,7 +97,41 @@ impl Parser<XYZFrame> for XYZFrame {
     type E = XYZError;
 
     fn parse_from_reader<R: BufRead>(&self, reader: &mut R) -> Result<Option<XYZFrame>, Self::E> {
-        unimplemented!("Parsing XYZ frames is not yet implemented.");
+        // 1. Read the atom-count line (skip blank lines)
+        let mut count_line = String::new();
+        loop {
+            count_line.clear();
+            let bytes_read = reader.read_line(&mut count_line)?;
+            if bytes_read == 0 {
+                return Ok(None); // EOF
+            }
+            if !count_line.trim().is_empty() {
+                break;
+            }
+        }
+
+        // 2. Read the comment line
+        let mut comment_line = String::new();
+        reader.read_line(&mut comment_line)?;
+
+        // 3. Parse atom count to know how many atom lines to read
+        let n_atoms: usize = count_line.trim().parse().map_err(|_| {
+            XYZError::ParseError(format!("invalid atom count: {:?}", count_line.trim()))
+        })?;
+
+        // 4. Read N atom lines
+        let mut atom_lines = String::new();
+        for _ in 0..n_atoms {
+            reader.read_line(&mut atom_lines)?;
+        }
+
+        // 5. Assemble the full frame text and parse with winnow
+        let mut frame_text = count_line;
+        frame_text.push_str(&comment_line);
+        frame_text.push_str(&atom_lines);
+
+        let mut input: &str = frame_text.as_str();
+        parser::parse_frame(&mut input).map_err(|e| XYZError::ParseError(e.to_string()))
     }
 }
 
