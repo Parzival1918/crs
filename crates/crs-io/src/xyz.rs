@@ -165,7 +165,8 @@ impl TryFrom<&str> for XYZFrame {
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         let mut input: &str = s;
-        let presult = parser::parse_frame(&mut input).map_err(|e| XYZError::ParseError(e.to_string()))?;
+        let presult =
+            parser::parse_frame(&mut input).map_err(|e| XYZError::ParseError(e.to_string()))?;
         if let Some(result) = presult {
             Ok(result)
         } else {
@@ -324,8 +325,18 @@ mod tests {
         );
 
         let rows = vec![
-            vec!["C".to_string(), "0.0".to_string(), "0.0".to_string(), "0.0".to_string()],
-            vec!["C".to_string(), "2.5".to_string(), "2.5".to_string(), "2.5".to_string()],
+            vec![
+                "C".to_string(),
+                "0.0".to_string(),
+                "0.0".to_string(),
+                "0.0".to_string(),
+            ],
+            vec![
+                "C".to_string(),
+                "2.5".to_string(),
+                "2.5".to_string(),
+                "2.5".to_string(),
+            ],
         ];
         let properties = vec![
             XYZPropery {

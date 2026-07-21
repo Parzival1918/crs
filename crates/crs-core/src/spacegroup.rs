@@ -1,10 +1,10 @@
 use crate::errors::CoreError;
-use moyo::data::{Setting, operations_from_number, hall_symbol_entry};
+use moyo::data::{Setting, hall_symbol_entry, operations_from_number};
 use nalgebra::{Matrix3, Vector3};
+use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 use std::sync::OnceLock;
-use std::collections::HashMap;
 
 type SymOpCache = HashMap<Vec<String>, SpaceGroup>;
 static SPACE_GROUP_CACHE: OnceLock<SymOpCache> = OnceLock::new();
@@ -260,8 +260,8 @@ impl fmt::Display for SymOp {
 
 #[cfg(test)]
 mod tests {
-    use std::ops;
     use super::*;
+    use std::ops;
 
     #[test]
     fn test_symop_display_and_parse() {
