@@ -96,7 +96,7 @@ impl XYZFrame {
 impl Parser<XYZFrame> for XYZFrame {
     type E = XYZError;
 
-    fn parse_from_reader<R: BufRead>(&self, reader: &mut R) -> Result<Option<XYZFrame>, Self::E> {
+    fn parse_from_reader<R: BufRead>(reader: &mut R) -> Result<Option<XYZFrame>, Self::E> {
         // 1. Read the atom-count line (skip blank lines)
         let mut count_line = String::new();
         loop {

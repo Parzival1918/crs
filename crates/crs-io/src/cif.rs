@@ -68,7 +68,7 @@ impl CifBlock {
 impl Parser<CifBlock> for CifBlock {
     type E = CifError;
 
-    fn parse_from_reader<R: BufRead>(&self, reader: &mut R) -> Result<Option<CifBlock>, Self::E> {
+    fn parse_from_reader<R: BufRead>(reader: &mut R) -> Result<Option<CifBlock>, Self::E> {
         let mut buffer = String::new();
         // Since a CIF block can be very large, and `parse_from_reader` is supposed to
         // read until it completes a block. The easiest approach for now is to read the

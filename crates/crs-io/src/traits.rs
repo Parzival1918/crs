@@ -7,14 +7,13 @@ pub trait Parser<T> {
     type E: From<std::io::Error>;
 
     /// Parse a single item from a reader. Returns `Ok(None)` if end-of-file is reached cleanly.
-    fn parse_from_reader<R: BufRead>(&self, reader: &mut R) -> Result<Option<T>, Self::E>;
+    fn parse_from_reader<R: BufRead>(reader: &mut R) -> Result<Option<T>, Self::E>;
 
     /// Return an iterator over all items in the reader.
-    fn parse_many_from_reader<'a, R: BufRead + 'a>(
-        &'a self,
+    fn parse_many_from_reader<R: BufRead>(
         mut reader: R,
-    ) -> impl Iterator<Item = Result<T, Self::E>> + 'a {
-        std::iter::from_fn(move || match self.parse_from_reader(&mut reader) {
+    ) -> impl Iterator<Item = Result<T, Self::E>> {
+        std::iter::from_fn(move || match Self::parse_from_reader(&mut reader) {
             Ok(Some(item)) => Some(Ok(item)),
             Ok(None) => None,
             Err(e) => Some(Err(e)),
@@ -22,10 +21,10 @@ pub trait Parser<T> {
     }
 
     /// Parse a single item from a file. Provides a default implementation.
-    fn parse_from_file<P: AsRef<Path>>(&self, path: P) -> Result<T, Self::E> {
+    fn parse_from_file<P: AsRef<Path>>(path: P) -> Result<T, Self::E> {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
-        self.parse_from_reader(&mut reader).and_then(|res| {
+        Self::parse_from_reader(&mut reader).and_then(|res| {
             res.ok_or_else(|| {
                 std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "Empty file").into()
             })
@@ -33,9 +32,9 @@ pub trait Parser<T> {
     }
 
     /// Parse a single item from a string. Provides a default implementation.
-    fn parse_from_string(&self, s: &str) -> Result<T, Self::E> {
+    fn parse_from_string(s: &str) -> Result<T, Self::E> {
         let mut reader = s.as_bytes();
-        self.parse_from_reader(&mut reader).and_then(|res| {
+        Self::parse_from_reader(&mut reader).and_then(|res| {
             res.ok_or_else(|| {
                 std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "Empty string").into()
             })
@@ -43,22 +42,24 @@ pub trait Parser<T> {
     }
 
     /// Parse all items from a file into a Vec. Provides a default implementation.
-    fn parse_many_from_file<'a, P: AsRef<Path>>(
-        &'a self,
+    fn parse_many_from_file<P: AsRef<Path>>(
         path: P,
-    ) -> Result<impl Iterator<Item = Result<T, Self::E>> + 'a, Self::E> {
+    ) -> Result<impl Iterator<Item = Result<T, Self::E>>, Self::E> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
-        Ok(self.parse_many_from_reader(reader))
+        Ok(Self::parse_many_from_reader(reader))
     }
 
     /// Parse all items from a string into a Vec. Provides a default implementation.
     fn parse_many_from_string<'a>(
-        &'a self,
         s: &'a str,
-    ) -> impl Iterator<Item = Result<T, Self::E>> + 'a {
+    ) -> impl Iterator<Item = Result<T, Self::E>> + 'a
+    where
+        Self: 'a,
+        T: 'a,
+    {
         let reader = s.as_bytes();
-        self.parse_many_from_reader(reader)
+        Self::parse_many_from_reader(reader)
     }
 }
 
