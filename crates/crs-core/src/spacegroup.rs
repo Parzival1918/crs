@@ -1,8 +1,34 @@
 use crate::errors::CoreError;
-use moyo::data::{Setting, operations_from_number};
+use moyo::data::{Setting, operations_from_number, hall_symbol_entry};
 use nalgebra::{Matrix3, Vector3};
 use std::fmt;
 use std::str::FromStr;
+use std::sync::OnceLock;
+use std::collections::HashMap;
+
+type SymOpCache = HashMap<Vec<String>, SpaceGroup>;
+static SPACE_GROUP_CACHE: OnceLock<SymOpCache> = OnceLock::new();
+
+fn get_space_group_cache() -> &'static SymOpCache {
+    SPACE_GROUP_CACHE.get_or_init(|| {
+        let mut cache = HashMap::new();
+        for hall_number in 1..=530 {
+            if let Some(entry) = hall_symbol_entry(hall_number) {
+                let number = entry.number as u16;
+                let setting = Setting::HallNumber(hall_number);
+                for primitive in [true, false] {
+                    if let Ok(sg) = SpaceGroup::new(number, setting, primitive) {
+                        let mut ops: Vec<String> =
+                            sg.operations().iter().map(|op| op.to_string()).collect();
+                        ops.sort();
+                        cache.insert(ops, sg);
+                    }
+                }
+            }
+        }
+        cache
+    })
+}
 
 #[derive(Debug, Clone)]
 pub struct SymOp {
@@ -68,6 +94,22 @@ impl SpaceGroup {
 
     pub fn n_symops(&self) -> usize {
         self.operations.len()
+    }
+
+    /// Identify a Space Group from a list of symmetry operations (as strings).
+    pub fn try_from_symops(ops: &[SymOp]) -> Result<Self, CoreError> {
+        let mut target_ops = Vec::with_capacity(ops.len());
+        for op in ops {
+            target_ops.push(op.to_string());
+        }
+        target_ops.sort();
+
+        let cache = get_space_group_cache();
+        if let Some(sg) = cache.get(&target_ops) {
+            Ok(sg.clone())
+        } else {
+            Err(CoreError::SpaceGroupNotFound(target_ops))
+        }
     }
 }
 
@@ -218,6 +260,7 @@ impl fmt::Display for SymOp {
 
 #[cfg(test)]
 mod tests {
+    use std::ops;
     use super::*;
 
     #[test]
@@ -259,6 +302,27 @@ mod tests {
     fn test_space_group_new_invalid_number() {
         let result = SpaceGroup::new(231, Setting::Spglib, true);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_space_group_from_symops() {
+        let ops = ["+x,+y,+z"];
+        let ops: Vec<SymOp> = ops.iter().map(|s| SymOp::from_str(s).unwrap()).collect();
+        let sg = SpaceGroup::try_from_symops(&ops).unwrap();
+        assert_eq!(sg.number(), 1);
+
+        let ops_p1bar = ["+x,+y,+z", "-x,-y,-z"];
+        let ops_p1bar: Vec<SymOp> = ops_p1bar
+            .iter()
+            .map(|s| SymOp::from_str(s).unwrap())
+            .collect();
+        let sg = SpaceGroup::try_from_symops(&ops_p1bar).unwrap();
+        assert_eq!(sg.number(), 2);
+
+        let ops = ["-x,-y+1/2,+z"];
+        let ops: Vec<SymOp> = ops.iter().map(|s| SymOp::from_str(s).unwrap()).collect();
+        let sg = SpaceGroup::try_from_symops(&ops);
+        assert!(sg.is_err());
     }
 
     #[test]

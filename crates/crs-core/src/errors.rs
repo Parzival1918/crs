@@ -9,4 +9,6 @@ pub enum CoreError {
     InvalidSpaceGroupSettings(Setting, bool),
     #[error("Invalid symmetry operation string: {0}")]
     InvalidSymOpString(String),
+    #[error("Space group not found for the given symmetry operations: {0:?}")]
+    SpaceGroupNotFound(Vec<String>),
 }
