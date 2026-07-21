@@ -1,13 +1,12 @@
 [package]
-name = "crs-core"
+name = "crs-io"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+crs-core = { path = "../crs-core" }
 nalgebra.workspace = true
 thiserror.workspace = true
-moyo = "0.12.0"
-kdtree = "0.8.0"
 
 [lints]
 workspace = true

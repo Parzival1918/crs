@@ -1,7 +1,7 @@
 [workspace]
 name = "crs-workspace"
 version = "0.1.0"
-description = "Molecular Crystal Structure Prediction Suite"
+description = "Computational chemistry in Rust"
 authors = ["Pedro Juan Royo <pedro.juan.royo@google.com>"]
 channels = ["conda-forge"]
 platforms = ["osx-arm64", "osx-64", "linux-64"]
@@ -15,3 +15,4 @@ make = "*"
 build = "cargo build --all"
 test = "cargo test --all"
 format = "cargo fmt --all"
+lint = "cargo clippy --all --all-targets --all-features -- -D warnings"

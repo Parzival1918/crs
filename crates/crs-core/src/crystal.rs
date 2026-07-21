@@ -3,7 +3,10 @@ use crate::data::{ANGSTROM3_TO_CM3, AVOGADRO_NUMBER};
 use crate::spacegroup::SpaceGroup;
 use crate::traits::{AtomicData, CartAtomicData, CellData, PeriodicAtomicData, SupercellData};
 use crate::unitcell::UnitCell;
-use crate::utils::{apply_symops, chemical_formula, molar_mass, wrap_coordinates_in_place, frac_to_cart, cart_to_frac};
+use crate::utils::{
+    apply_symops, cart_to_frac, chemical_formula, frac_to_cart, molar_mass,
+    wrap_coordinates_in_place,
+};
 use moyo::base::Cell;
 use nalgebra::{Matrix3, MatrixXx3};
 

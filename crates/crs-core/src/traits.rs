@@ -1,8 +1,8 @@
+use crate::data::{DEFAULT_ANG_TOL, DEFAULT_DIST_TOL};
 use crate::unitcell::CellType;
 use crate::utils::wrap_coordinates_in_place;
-use crate::data::{DEFAULT_DIST_TOL, DEFAULT_ANG_TOL};
+use core::f64::consts::{FRAC_2_PI, FRAC_PI_2};
 use nalgebra::{Matrix3, MatrixXx3, RowVector3, Vector3};
-use core::f64::consts::{FRAC_PI_3, FRAC_PI_2};
 
 pub trait CellData {
     /// Cell vectors stored in rows of a 3x3 matrix.
@@ -63,7 +63,7 @@ pub trait CellData {
             CellType::Rhombohedral
         } else if (alpha - FRAC_PI_2).abs() < DEFAULT_ANG_TOL
             && (beta - FRAC_PI_2).abs() < DEFAULT_ANG_TOL
-            && (gamma - FRAC_PI_3).abs() < DEFAULT_ANG_TOL
+            && (gamma - FRAC_2_PI / 3.0).abs() < DEFAULT_ANG_TOL
         {
             CellType::Hexagonal
         } else if (alpha - FRAC_PI_2).abs() < DEFAULT_ANG_TOL

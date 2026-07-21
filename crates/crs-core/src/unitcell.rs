@@ -1,7 +1,7 @@
 use crate::data::{DEFAULT_ANG_TOL, DEFAULT_DIST_TOL};
 use crate::traits::CellData;
 use crate::utils::{cart_to_frac, cell_matrix_and_volume, frac_to_cart};
-use core::f64::consts::{FRAC_PI_2, FRAC_PI_3};
+use core::f64::consts::{FRAC_2_PI, FRAC_PI_2};
 use moyo::base::Cell;
 use nalgebra::{Matrix3, MatrixXx3};
 
@@ -62,10 +62,7 @@ impl UnitCell {
     }
 
     pub fn hexagonal(a: f64, c: f64) -> Self {
-        Self::new(
-            [a, a, c],
-            [FRAC_PI_2, FRAC_PI_2, FRAC_PI_3],
-        )
+        Self::new([a, a, c], [FRAC_PI_2, FRAC_PI_2, FRAC_2_PI / 3.0])
     }
 
     pub fn rhombohedral(a: f64, alpha: f64) -> Self {

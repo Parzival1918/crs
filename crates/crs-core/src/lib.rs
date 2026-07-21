@@ -1,12 +1,9 @@
-// allow unused code for now, as this is a work in progress
-#![allow(unused)]
-
-mod au;
-mod crystal;
-mod data;
-mod errors;
-mod molecule;
-mod spacegroup;
-mod traits;
-mod unitcell;
-mod utils;
+pub mod au;
+pub mod crystal;
+pub mod data;
+pub mod errors;
+pub mod molecule;
+pub mod spacegroup;
+pub mod traits;
+pub mod unitcell;
+pub mod utils;
