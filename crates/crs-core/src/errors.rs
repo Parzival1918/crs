@@ -7,4 +7,6 @@ pub enum CoreError {
     InvalidSpaceGroupNumber(u16),
     #[error("Invalid space group settings: {0:?}, primitive: {1}.")]
     InvalidSpaceGroupSettings(Setting, bool),
+    #[error("Invalid symmetry operation string: {0}")]
+    InvalidSymOpString(String),
 }
