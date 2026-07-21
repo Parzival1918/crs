@@ -1,3 +1,4 @@
+pub mod cif;
 pub mod traits;
 pub mod xyz;
 
