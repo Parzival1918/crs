@@ -20,7 +20,7 @@ type PResult<T> = ModalResult<T>;
 
 /// Parse the first line of a frame: optional leading whitespace, an integer,
 /// optional trailing whitespace, then a newline.
-fn parse_atom_count(input: &mut &str) -> PResult<usize> {
+pub(super) fn parse_atom_count(input: &mut &str) -> PResult<usize> {
     let _ = space0.parse_next(input)?;
     let digits: &str = digit1.parse_next(input)?;
     let _ = space0.parse_next(input)?;
@@ -111,7 +111,7 @@ fn parse_key_value(input: &mut &str) -> PResult<(String, String)> {
 
 /// Parse the entire comment line into a `HashMap<String, String>`.
 /// Consumes everything up to (and including) the line ending.
-fn parse_comment_line(input: &mut &str) -> PResult<HashMap<String, String>> {
+pub(super) fn parse_comment_line(input: &mut &str) -> PResult<HashMap<String, String>> {
     let _ = space0.parse_next(input)?;
     let mut map = HashMap::new();
 
@@ -137,7 +137,7 @@ fn parse_comment_line(input: &mut &str) -> PResult<HashMap<String, String>> {
 // ---------------------------------------------------------------------------
 
 /// Default properties for standard XYZ: species (string, 1 col) + pos (real, 3 cols).
-fn default_properties() -> Vec<XYZPropery> {
+pub(super) fn default_properties() -> Vec<XYZPropery> {
     vec![
         XYZPropery {
             name: "species".to_string(),
@@ -153,7 +153,7 @@ fn default_properties() -> Vec<XYZPropery> {
 }
 
 /// Parse the `Properties` value string, e.g. `"species:S:1:pos:R:3:forces:R:3"`.
-fn parse_properties(input: &mut &str) -> PResult<Vec<XYZPropery>> {
+pub(super) fn parse_properties(input: &mut &str) -> PResult<Vec<XYZPropery>> {
     let mut props = Vec::new();
 
     loop {
@@ -202,7 +202,7 @@ fn parse_properties(input: &mut &str) -> PResult<Vec<XYZPropery>> {
 
 /// Parse a single per-atom data line: whitespace-separated tokens.
 /// Returns the tokens as a `Vec<String>`.
-fn parse_atom_line(input: &mut &str, expected_cols: usize) -> PResult<Vec<String>> {
+pub(super) fn parse_atom_line(input: &mut &str, expected_cols: usize) -> PResult<Vec<String>> {
     let _ = space0.parse_next(input)?;
     let mut tokens = Vec::with_capacity(expected_cols);
 

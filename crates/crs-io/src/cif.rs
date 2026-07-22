@@ -78,15 +78,76 @@ impl Parser<CifBlock> for CifBlock {
 
     fn parse_from_reader<R: BufRead>(reader: &mut R) -> Result<Option<CifBlock>, Self::E> {
         let mut buffer = String::new();
-        // Since a CIF block can be very large, and `parse_from_reader` is supposed to
-        // read until it completes a block. The easiest approach for now is to read the
-        // entire stream into a string and parse it, but that doesn't work well if we want
-        // to parse multiple blocks incrementally from a stream.
-        // For a true stream parser, we'd read chunk by chunk. For simplicity (like XYZ),
-        // let's read the whole file if this is the first call, or we can use winnow's
-        // streaming capabilities, but `xyz` reads all into memory.
+        let mut in_text_block = false;
+        let mut has_data = false;
 
-        reader.read_to_string(&mut buffer)?;
+        loop {
+            let buf = reader.fill_buf()?;
+            if buf.is_empty() {
+                break;
+            }
+
+            let mut line_end = buf.len();
+            let mut found_newline = false;
+            for (i, &b) in buf.iter().enumerate() {
+                if b == b'\n' {
+                    line_end = i + 1;
+                    found_newline = true;
+                    break;
+                }
+            }
+
+            let line_bytes = &buf[..line_end];
+            let line_str = String::from_utf8_lossy(line_bytes);
+            let trimmed = line_str.trim_start();
+            
+            let starts_with_semi = line_str.starts_with(';');
+            let is_data_start = !in_text_block && trimmed.to_lowercase().starts_with("data_");
+
+            if is_data_start && has_data {
+                // We found the start of the next block. Stop reading.
+                break;
+            }
+
+            if starts_with_semi {
+                in_text_block = !in_text_block;
+            }
+            
+            if is_data_start {
+                has_data = true;
+            } else if !has_data && !trimmed.is_empty() {
+                has_data = true;
+            }
+
+            buffer.push_str(&line_str);
+            reader.consume(line_end);
+
+            if !found_newline {
+                // Read the rest of the line
+                loop {
+                    let buf2 = reader.fill_buf()?;
+                    if buf2.is_empty() {
+                        break;
+                    }
+                    let mut le = buf2.len();
+                    let mut fnl = false;
+                    for (i, &b) in buf2.iter().enumerate() {
+                        if b == b'\n' {
+                            le = i + 1;
+                            fnl = true;
+                            break;
+                        }
+                    }
+                    let chunk_str = String::from_utf8_lossy(&buf2[..le]);
+                    buffer.push_str(&chunk_str);
+                    reader.consume(le);
+                    if fnl {
+                        break;
+                    }
+                }
+            }
+        }
+
         if buffer.trim().is_empty() {
             return Ok(None);
         }
@@ -400,5 +461,42 @@ mod tests {
         let crystal = Crystal::try_from(block).unwrap();
         assert_eq!(crystal.atomic_nums(), &[6, 6]);
         assert_eq!(crystal.lengths(), [5.0, 5.0, 5.0]);
+    }
+
+    #[test]
+    fn test_parse_many_from_string() {
+        let cif_data = r#"
+            data_test
+            loop_
+            _atom_site_label
+            _atom_site_Cartn_x
+            _atom_site_Cartn_y
+            _atom_site_Cartn_z
+            O 0.0 0.0 0.1173
+            H 0.0 0.7572 -0.4692
+            H 0.0 -0.7572 -0.4692
+            # Some comment
+
+            data_test2
+            loop_
+            _atom_site_label
+            _atom_site_Cartn_x
+            _atom_site_Cartn_y
+            _atom_site_Cartn_z
+            O 0.0 0.0 0.1173 # more comments
+            H 0.0 0.7572 -0.4692
+            H 0.0 -0.7572 -0.4692
+        "#;
+
+        let blocks: Vec<_> = CifBlock::parse_many_from_string(cif_data)
+            .map(|res| res.unwrap())
+            .collect();
+
+        assert_eq!(blocks.len(), 2);
+        for i in 0..2 {
+            let mol = Molecule::try_from(blocks[i].clone()).unwrap();
+            use crs_core::traits::AtomicData;
+            assert_eq!(mol.atomic_nums(), &[8, 1, 1]);
+        }
     }
 }

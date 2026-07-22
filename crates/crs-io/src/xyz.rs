@@ -110,28 +110,41 @@ impl Parser<XYZFrame> for XYZFrame {
             }
         }
 
+        let mut input: &str = count_line.as_str();
+        let n_atoms = parser::parse_atom_count(&mut input)
+            .map_err(|e| XYZError::ParseError(e.to_string()))?;
+
         // 2. Read the comment line
         let mut comment_line = String::new();
         reader.read_line(&mut comment_line)?;
+        let mut input: &str = comment_line.as_str();
+        let info = parser::parse_comment_line(&mut input)
+            .map_err(|e| XYZError::ParseError(e.to_string()))?;
 
-        // 3. Parse atom count to know how many atom lines to read
-        let n_atoms: usize = count_line.trim().parse().map_err(|_| {
-            XYZError::ParseError(format!("invalid atom count: {:?}", count_line.trim()))
-        })?;
+        // 3. Determine row properties
+        let row_properties = if let Some(props_str) = info.get("Properties") {
+            let mut s: &str = props_str.as_str();
+            parser::parse_properties(&mut s)
+                .map_err(|_| XYZError::ParseError("Invalid Properties".to_string()))?
+        } else {
+            parser::default_properties()
+        };
 
-        // 4. Read N atom lines
-        let mut atom_lines = String::new();
+        let expected_cols: usize = row_properties.iter().map(|p| p.n_consecutive_cols).sum();
+
+        // 4. Read N atom lines line by line and parse
+        let mut rows = Vec::with_capacity(n_atoms);
+        let mut atom_line = String::new();
         for _ in 0..n_atoms {
-            reader.read_line(&mut atom_lines)?;
+            atom_line.clear();
+            reader.read_line(&mut atom_line)?;
+            let mut input: &str = atom_line.as_str();
+            let tokens = parser::parse_atom_line(&mut input, expected_cols)
+                .map_err(|e| XYZError::ParseError(e.to_string()))?;
+            rows.push(tokens);
         }
 
-        // 5. Assemble the full frame text and parse with winnow
-        let mut frame_text = count_line;
-        frame_text.push_str(&comment_line);
-        frame_text.push_str(&atom_lines);
-
-        let mut input: &str = frame_text.as_str();
-        parser::parse_frame(&mut input).map_err(|e| XYZError::ParseError(e.to_string()))
+        Ok(Some(XYZFrame::new(row_properties, info, rows)))
     }
 }
 
