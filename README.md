@@ -2,8 +2,9 @@
 
 ## To do
 
-- Add parsing symmetry operation from string, for example, "x,y,z" or "-x,-y,z+1/2".
-- Find space group from symmetry operations.
-- Add parser for XYZ files, including extended XYZ files.
-- Add parser for CIF files.
-- Add parser for SHELX files.
+- Energy evaluations
+- Crystal structure generation
+- Calculation of descriptors:
+    - Radial distribution function
+    - Steinhardt order parameters
+    - Simulated X-ray diffraction patterns
