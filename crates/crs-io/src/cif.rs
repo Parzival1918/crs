@@ -100,7 +100,7 @@ impl Parser<CifBlock> for CifBlock {
             let line_bytes = &buf[..line_end];
             let line_str = String::from_utf8_lossy(line_bytes);
             let trimmed = line_str.trim_start();
-            
+
             let starts_with_semi = line_str.starts_with(';');
             let is_data_start = !in_text_block && trimmed.to_lowercase().starts_with("data_");
 
@@ -112,7 +112,7 @@ impl Parser<CifBlock> for CifBlock {
             if starts_with_semi {
                 in_text_block = !in_text_block;
             }
-            
+
             if is_data_start {
                 has_data = true;
             } else if !has_data && !trimmed.is_empty() {
