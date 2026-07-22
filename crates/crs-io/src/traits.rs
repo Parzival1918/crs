@@ -51,9 +51,7 @@ pub trait Parser<T> {
     }
 
     /// Parse all items from a string into a Vec. Provides a default implementation.
-    fn parse_many_from_string<'a>(
-        s: &'a str,
-    ) -> impl Iterator<Item = Result<T, Self::E>> + 'a
+    fn parse_many_from_string<'a>(s: &'a str) -> impl Iterator<Item = Result<T, Self::E>> + 'a
     where
         Self: 'a,
         T: 'a,
