@@ -11,8 +11,15 @@ rust = ">=1.96.0"
 clang = "*"
 make = "*"
 
+[feature.dev.dependencies]
+prek = "*"
+
+[environments]
+dev = { features = ["dev"] }
+
 [tasks]
-build = "cargo build --all"
-test = "cargo test --all"
-format = "cargo fmt --all"
-lint = "cargo clippy --all --all-targets --all-features -- -D warnings"
+build = { description = "Build the workspace", cmd = ["cargo", "build", "--all"] }
+test = { description = "Run tests", cmd = ["cargo", "test", "--all"] }
+format = { description = "Format the code", cmd = ["cargo", "fmt", "--all"] }
+lint = { description = "Run linter", cmd = ["cargo", "clippy", "--all", "--all-targets", "--all-features", "--", "-D", "warnings"] }
+dev-setup = { description = "Setup development environment", cmd = ["prek", "install"], default-environment = "dev" }
